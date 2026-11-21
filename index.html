@@ -55,7 +55,7 @@
         <input
           id="searchInput"
           type="text"
-          placeholder="Tìm Pokémon theo tên hoặc số (VD: Pikachu, 25, Gengar)..."
+          placeholder="Tìm Pokémon theo tên hoặc số (VD: Pikachu, 25, Eevee, Gengar)..."
           class="w-full bg-slate-900/90 text-white placeholder-slate-400 text-sm rounded-xl pl-10 pr-20 py-3 border border-slate-700 focus:outline-none focus:border-rose-500 transition"
           oninput="handleSearchInput()"
           onkeydown="if(event.key==='Enter') searchExactOrFirst()"
@@ -157,7 +157,7 @@
   </div>
 
   <script>
-    // ==================== TỪ ĐIỂN VIỆT HÓA HỆ & CHÚ THÍCH ====================
+    // ==================== TỪ ĐIỂN VIỆT HÓA HỆ, GAME & CHÚ THÍCH ====================
     const TYPE_INFO = {
       normal:   { vi: "Thường",    en: "Normal",   color: "bg-stone-500 text-white" },
       fire:     { vi: "Lửa",       en: "Fire",     color: "bg-orange-600 text-white" },
@@ -177,6 +177,30 @@
       dark:     { vi: "Bóng tối",  en: "Dark",     color: "bg-neutral-800 text-white border border-slate-600" },
       steel:    { vi: "Thép",      en: "Steel",    color: "bg-slate-400 text-slate-950" },
       fairy:    { vi: "Tiên",      en: "Fairy",    color: "bg-pink-400 text-slate-950" }
+    };
+
+    const VERSION_GROUP_NAMES = {
+      "red-blue": "Red / Blue",
+      "yellow": "Yellow",
+      "gold-silver": "Gold / Silver",
+      "crystal": "Crystal",
+      "ruby-sapphire": "Ruby / Sapphire",
+      "emerald": "Emerald",
+      "firered-leafgreen": "FireRed / LeafGreen",
+      "diamond-pearl": "Diamond / Pearl",
+      "platinum": "Platinum",
+      "heartgold-soulsilver": "HeartGold / SoulSilver",
+      "black-white": "Black / White",
+      "black-2-white-2": "Black 2 / White 2",
+      "x-y": "X / Y",
+      "omega-ruby-alpha-sapphire": "Omega Ruby / Alpha Sapphire",
+      "sun-moon": "Sun / Moon",
+      "ultra-sun-ultra-moon": "Ultra Sun / Ultra Moon",
+      "lets-go-pikachu-lets-go-eevee": "Let's Go Pikachu / Eevee",
+      "sword-shield": "Sword / Shield",
+      "brilliant-diamond-and-shining-pearl": "Brilliant Diamond / Shining Pearl",
+      "legends-arceus": "Legends: Arceus",
+      "scarlet-violet": "Scarlet / Violet"
     };
 
     const TYPE_CHART = {
@@ -220,7 +244,9 @@
       "technician": "Tăng 50% sức mạnh cho các chiêu thức có lực đánh cơ bản từ 60 trở xuống.",
       "protean": "Đổi hệ của bản thân sang trùng với hệ của chiêu thức sắp sử dụng.",
       "multiscale": "Giảm một nửa sát thương nhận vào khi thanh HP đang đầy 100%.",
-      "prankster": "Tăng thêm +1 độ ưu tiên (ra đòn trước) cho toàn bộ các chiêu thức trạng thái (Status)."
+      "prankster": "Tăng thêm +1 độ ưu tiên (ra đòn trước) cho toàn bộ các chiêu thức trạng thái (Status).",
+      "adaptability": "Tăng hệ số sát thương cùng hệ (STAB) từ 1.5x lên thành 2.0x.",
+      "anticipation": "Rùng mình cảnh báo nếu đối thủ có mang chiêu thức khắc hệ siêu hiệu quả hoặc chiêu hạ gục 1 đòn."
     };
 
     const VI_MOVE_DESC = {
@@ -243,7 +269,9 @@
       "nasty-plot": "Suy tính mưu mô để tăng mạnh 2 bậc chỉ số Sp. Atk.",
       "dragon-dance": "Điệu nhảy rồng huyền bí giúp tăng đồng thời 1 bậc Attack và 1 bậc Speed.",
       "recover": "Tự phục hồi tế bào để hồi lại 50% lượng HP tối đa của bản thân.",
-      "toxic": "Đầu độc nặng mục tiêu; sát thương mất máu sẽ tăng dần qua từng lượt đấu."
+      "toxic": "Đầu độc nặng mục tiêu; sát thương mất máu sẽ tăng dần qua từng lượt đấu.",
+      "wish": "Gửi điều ước hồi phục 50% lượng HP tối đa của người dùng cho Pokémon đứng trên sân ở cuối lượt kế tiếp.",
+      "yawn": "Ngáp lớn khiến đối thủ buồn ngủ và sẽ chìm vào giấc ngủ sâu ở cuối lượt tiếp theo."
     };
 
     const GEN_RANGES = {
@@ -267,6 +295,8 @@
     const detailCache = {};
     const abilityDescCache = {};
     const moveDescCache = {};
+    let activePokeData = null;
+    let activeMoveTab = "level-up";
 
     async function initApp() {
       try {
@@ -380,26 +410,69 @@
       filterByGen(0);
     }
 
-    function switchMoveSubTab(subName) {
-      const lvlBtn = document.getElementById("subTabLvlBtn");
-      const tmBtn = document.getElementById("subTabTmBtn");
-      const lvlPanel = document.getElementById("subPanelLvl");
-      const tmPanel = document.getElementById("subPanelTm");
+    // ==================== GIẢI MÃ ĐIỀU KIỆN TIẾN HÓA CHI TIẾT ====================
+    function formatEvolutionDetails(detailsList) {
+      if (!detailsList || detailsList.length === 0) return "";
+      const conds = detailsList.map(d => {
+        const parts = [];
+        const trigger = d.trigger ? d.trigger.name : "";
 
-      if (subName === "lvl") {
-        lvlBtn.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white transition";
-        tmBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition";
-        lvlPanel.classList.remove("hidden");
-        tmPanel.classList.add("hidden");
-      } else {
-        tmBtn.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white transition";
-        lvlBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition";
-        tmPanel.classList.remove("hidden");
-        lvlPanel.classList.add("hidden");
-      }
+        if (trigger === "level-up") {
+          parts.push(d.min_level ? `Lv. ${d.min_level}` : "Lên cấp");
+        } else if (trigger === "use-item" && d.item) {
+          parts.push(`Dùng ${formatEnglishName(d.item.name)}`);
+        } else if (trigger === "trade") {
+          parts.push(d.held_item ? `Trade + cầm ${formatEnglishName(d.held_item.name)}` : "Trade");
+        } else if (trigger === "shed") {
+          parts.push("Trống 1 ô team + có Poké Ball");
+        } else if (trigger) {
+          parts.push(formatEnglishName(trigger));
+        }
+
+        if (d.gender === 1) parts.push("Chỉ con cái ♀");
+        if (d.gender === 2) parts.push("Chỉ con đực ♂");
+        if (d.time_of_day === "day") parts.push("Ban ngày");
+        if (d.time_of_day === "night") parts.push("Ban đêm");
+        if (d.time_of_day === "dusk") parts.push("Hoàng hôn (Dusk)");
+        if (d.min_happiness) parts.push(`Happiness ≥ ${d.min_happiness}`);
+        if (d.min_affection) parts.push(`Affection ≥ ${d.min_affection}`);
+        if (d.min_beauty) parts.push(`Beauty ≥ ${d.min_beauty}`);
+        if (d.known_move) parts.push(`Biết chiêu ${formatEnglishName(d.known_move.name)}`);
+        if (d.known_move_type) parts.push(`Biết chiêu hệ ${TYPE_INFO[d.known_move_type.name]?.en || d.known_move_type.name}`);
+        if (d.held_item && trigger !== "trade") parts.push(`Cầm ${formatEnglishName(d.held_item.name)}`);
+        if (d.location) parts.push(`Tại ${formatEnglishName(d.location.name)}`);
+        if (d.needs_overworld_rain) parts.push("Trời đang mưa");
+        if (d.turn_upside_down) parts.push("Lật ngược máy");
+        if (d.party_species) parts.push(`Có ${formatEnglishName(d.party_species.name)} trong đội`);
+
+        return parts.join(" + ");
+      }).filter(Boolean);
+
+      return [...new Set(conds)].join(" / ");
     }
 
-    // ==================== CHI TIẾT POKÉMON (CUỘN DỌC LIỀN MẠCH) ====================
+    function parseEvolutionTree(node) {
+      const stages = [];
+      function traverse(curr, depth = 0) {
+        if (!curr) return;
+        const urlParts = curr.species.url.split("/").filter(Boolean);
+        const spId = Number(urlParts[urlParts.length - 1]);
+        const condition = formatEvolutionDetails(curr.evolution_details);
+        stages.push({
+          id: spId,
+          name: formatEnglishName(curr.species.name),
+          condition,
+          depth
+        });
+        if (curr.evolves_to && curr.evolves_to.length > 0) {
+          curr.evolves_to.forEach(nextNode => traverse(nextNode, depth + 1));
+        }
+      }
+      traverse(node, 0);
+      return stages;
+    }
+
+    // ==================== CHI TIẾT POKÉMON ====================
     async function openPokemonDetail(id) {
       document.getElementById("listSection").classList.add("hidden");
       const detailSec = document.getElementById("detailSection");
@@ -413,7 +486,7 @@
       detailContent.innerHTML = `
         <div class="glass-card rounded-2xl p-10 text-center space-y-3">
           <div class="w-10 h-10 border-4 border-rose-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p class="text-xs text-slate-300">Đang tải dữ liệu #${id}...</p>
+          <p class="text-xs text-slate-300">Đang tải dữ liệu #${id} từ PokéAPI...</p>
         </div>
       `;
 
@@ -431,13 +504,15 @@
           if (species.evolution_chain && species.evolution_chain.url) {
             const evoRes = await fetch(species.evolution_chain.url);
             const evoData = await evoRes.json();
-            evoChain = parseEvolutionChain(evoData.chain);
+            evoChain = parseEvolutionTree(evoData.chain);
           }
 
           fullData = { poke, species, evoChain };
           detailCache[id] = fullData;
         }
 
+        activePokeData = fullData;
+        activeMoveTab = "level-up";
         renderPokemonDetail(fullData);
       } catch (err) {
         detailContent.innerHTML = `
@@ -473,32 +548,19 @@
       return result;
     }
 
-    function parseEvolutionChain(node) {
-      const stages = [];
-      function traverse(curr) {
-        if (!curr) return;
-        const urlParts = curr.species.url.split("/").filter(Boolean);
-        const spId = Number(urlParts[urlParts.length - 1]);
-        let condition = "";
-        if (curr.evolution_details && curr.evolution_details.length > 0) {
-          const d = curr.evolution_details[0];
-          if (d.min_level) condition = `Lv. ${d.min_level}`;
-          else if (d.item) condition = formatEnglishName(d.item.name);
-          else if (d.trigger && d.trigger.name === "trade") condition = "Trade";
-          else if (d.min_happiness) condition = "Happiness";
-          else if (d.trigger) condition = formatEnglishName(d.trigger.name);
-        }
-        stages.push({
-          id: spId,
-          name: formatEnglishName(curr.species.name),
-          condition
+    function extractAvailableVersionGroups(poke) {
+      const orderedSlugs = Object.keys(VERSION_GROUP_NAMES);
+      const foundSet = new Set();
+      poke.moves.forEach(m => {
+        m.version_group_details.forEach(vg => {
+          foundSet.add(vg.version_group.name);
         });
-        if (curr.evolves_to && curr.evolves_to.length > 0) {
-          curr.evolves_to.forEach(nextNode => traverse(nextNode));
-        }
-      }
-      traverse(node);
-      return stages;
+      });
+      const sorted = orderedSlugs.filter(slug => foundSet.has(slug));
+      foundSet.forEach(slug => {
+        if (!sorted.includes(slug)) sorted.push(slug);
+      });
+      return sorted;
     }
 
     function renderPokemonDetail({ poke, species, evoChain }) {
@@ -506,17 +568,28 @@
       const types = poke.types.map(t => t.type.name);
       const multipliers = calculateDefendingMultipliers(types);
 
-      // Lấy mô tả Pokédex Entry từ species
+      // Lấy mô tả Pokédex tiếng Anh (mới nhất) & nhóm loài
       const flavorEntries = species.flavor_text_entries || [];
-      const enFlavor = flavorEntries.slice().reverse().find(f => f.language.name === "en");
-      const pokedexDesc = enFlavor
-        ? enFlavor.flavor_text.replace(/[\n\f\r]+/g, " ").replace(/\s+/g, " ").trim()
+      const enFlavors = flavorEntries.filter(f => f.language.name === "en");
+      const latestFlavor = enFlavors.length > 0 ? enFlavors[enFlavors.length - 1] : null;
+      const pokedexDesc = latestFlavor
+        ? latestFlavor.flavor_text.replace(/[\n\f\r]+/g, " ").replace(/\s+/g, " ").trim()
         : "Chưa có mô tả Pokédex cho loài này.";
 
       const genusObj = (species.genera || []).find(g => g.language.name === "en");
       const categoryText = genusObj ? genusObj.genus : "Pokémon";
 
-      // Phân nhóm khắc hệ chi tiết của riêng Pokémon này
+      // Danh sách các bản game xuất hiện
+      const versionGroups = extractAvailableVersionGroups(poke);
+      const gameBadgesHtml = versionGroups.length > 0
+        ? versionGroups.map(slug => `
+            <span class="px-2.5 py-1 rounded-lg bg-slate-800/90 text-[11px] font-semibold text-sky-300 border border-slate-700">
+              ${VERSION_GROUP_NAMES[slug] || formatEnglishName(slug)}
+            </span>
+          `).join("")
+        : `<span class="text-xs text-slate-400">Chưa rõ phiên bản game.</span>`;
+
+      // Bảng khắc hệ
       const weak4 = [], weak2 = [], res05 = [], res025 = [], immune0 = [];
       Object.entries(multipliers).forEach(([atk, val]) => {
         if (val === 4) weak4.push(atk);
@@ -526,6 +599,7 @@
         else if (val === 0) immune0.push(atk);
       });
 
+      // Chỉ số cơ bản
       const statLabels = {
         "hp": "HP",
         "attack": "Attack",
@@ -554,6 +628,7 @@
         `;
       }).join("");
 
+      // Đặc tính
       const abilitiesHtml = poke.abilities.map(a => {
         const slug = a.ability.name;
         const enName = formatEnglishName(slug);
@@ -567,89 +642,72 @@
         `;
       }).join("");
 
+      // Sơ đồ tiến hóa đầy đủ điều kiện (hỗ trợ cả nhánh rẽ nhiều nhánh như Eevee/Wurmple)
+      const isBranched = evoChain.length > 3;
       const evoHtml = evoChain.length > 0 ? evoChain.map((stage, i) => `
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex items-center gap-2 ${isBranched ? '' : 'shrink-0'}">
           ${i > 0 ? `
-            <div class="text-center px-1">
+            <div class="text-center px-1 max-w-[130px]">
               <div class="text-slate-400 text-sm">→</div>
-              ${stage.condition ? `<span class="text-[10px] font-bold text-amber-300 bg-slate-800 px-2 py-0.5 rounded-full">${stage.condition}</span>` : ""}
+              ${stage.condition ? `<span class="inline-block text-[10px] font-bold text-amber-300 bg-slate-800 px-2 py-0.5 rounded-lg leading-tight">${stage.condition}</span>` : ""}
             </div>
           ` : ""}
-          <div onclick="openPokemonDetail(${stage.id})" class="bg-slate-900/80 hover:border-rose-500 border ${stage.id === poke.id ? 'border-rose-500' : 'border-slate-800'} rounded-xl p-2.5 text-center cursor-pointer transition w-24">
+          <div onclick="openPokemonDetail(${stage.id})" class="bg-slate-900/80 hover:border-rose-500 border ${stage.id === poke.id ? 'border-rose-500' : 'border-slate-800'} rounded-xl p-2.5 text-center cursor-pointer transition w-24 shrink-0">
             <img src="${getSpriteUrl(stage.id)}" alt="${stage.name}" class="w-14 h-14 object-contain mx-auto" />
             <div class="text-[10px] text-slate-400 font-semibold mt-1">#${String(stage.id).padStart(4, "0")}</div>
             <div class="text-xs font-bold text-white truncate">${stage.name}</div>
           </div>
         </div>
-      `).join("") : `<p class="text-xs text-slate-400">Không có dữ liệu nhánh tiến hóa.</p>`;
+      `).join("") : `<p class="text-xs text-slate-400">Loài này không tiến hóa.</p>`;
 
-      // Bể chiêu thức học được (Move Pool)
-      const levelMoves = [];
-      const machineMoves = [];
-      poke.moves.forEach(m => {
-        const slug = m.move.name;
-        const enName = formatEnglishName(slug);
-        const latestDetail = m.version_group_details[m.version_group_details.length - 1];
-        if (!latestDetail) return;
-        const method = latestDetail.move_learn_method.name;
-        const lvl = latestDetail.level_learned_at;
-        if (method === "level-up") {
-          levelMoves.push({ slug, enName, lvl });
-        } else if (method === "machine") {
-          machineMoves.push({ slug, enName });
-        }
-      });
-      levelMoves.sort((a, b) => a.lvl - b.lvl);
-
-      const movesListHtml = levelMoves.map(m => {
-        const desc = VI_MOVE_DESC[m.slug] || "Chạm để xem chú thích năng lực chiêu.";
-        return `
-          <div onclick="loadMoveDetail('${m.slug}')" class="bg-slate-900/75 hover:bg-slate-800/90 rounded-xl p-2.5 border border-slate-800 cursor-pointer transition">
-            <div class="flex items-center justify-between">
-              <span class="font-bold text-xs text-white">${m.enName}</span>
-              <span class="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-emerald-300">Lv. ${m.lvl === 0 ? "Evo" : m.lvl}</span>
-            </div>
-            <p id="mv-desc-${m.slug}" class="text-[11px] text-slate-400 mt-1">${desc}</p>
-          </div>
-        `;
-      }).join("");
-
-      const tmListHtml = machineMoves.map(m => `
-        <span onclick="loadMoveDetail('${m.slug}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer">
-          ${m.enName}
-        </span>
+      // Dropdown chọn bản game cho Move Pool
+      const defaultVersion = versionGroups.length > 0 ? versionGroups[versionGroups.length - 1] : "";
+      const versionOptionsHtml = versionGroups.map(slug => `
+        <option value="${slug}" ${slug === defaultVersion ? "selected" : ""}>
+          ${VERSION_GROUP_NAMES[slug] || formatEnglishName(slug)}
+        </option>
       `).join("");
 
       document.getElementById("detailContent").innerHTML = `
-        <!-- 1. THÔNG TIN POKÉDEX TỔNG QUAN -->
-        <div class="glass-card rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-5">
-          <div class="w-full sm:w-52 shrink-0 flex flex-col items-center bg-slate-900/70 rounded-2xl p-4 border border-slate-800 relative">
-            <button
-              id="shinyToggleBtn"
-              onclick="toggleShinySprite(${poke.id})"
-              data-shiny="false"
-              class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-[11px] font-bold text-amber-300 border border-slate-700 transition">
-              ✨ Shiny
-            </button>
-            <img id="detailMainImg" src="${getSpriteUrl(poke.id, false)}" alt="${displayName}" class="w-36 h-36 sm:w-40 sm:h-40 object-contain my-1" />
-            <div class="flex flex-wrap justify-center gap-1.5 mt-2">
-              ${types.map(renderTypeBadge).join("")}
+        <!-- 1. THÔNG TIN POKÉDEX & CÁC BẢN GAME XUẤT HIỆN -->
+        <div class="glass-card rounded-2xl p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row items-center gap-5">
+            <div class="w-full sm:w-52 shrink-0 flex flex-col items-center bg-slate-900/70 rounded-2xl p-4 border border-slate-800 relative">
+              <button
+                id="shinyToggleBtn"
+                onclick="toggleShinySprite(${poke.id})"
+                data-shiny="false"
+                class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-[11px] font-bold text-amber-300 border border-slate-700 transition">
+                ✨ Shiny
+              </button>
+              <img id="detailMainImg" src="${getSpriteUrl(poke.id, false)}" alt="${displayName}" class="w-36 h-36 sm:w-40 sm:h-40 object-contain my-1" />
+              <div class="flex flex-wrap justify-center gap-1.5 mt-2">
+                ${types.map(renderTypeBadge).join("")}
+              </div>
+            </div>
+
+            <div class="flex-1 w-full space-y-3 text-center sm:text-left">
+              <div>
+                <div class="flex items-center justify-center sm:justify-start gap-2">
+                  <span class="text-xs font-extrabold text-rose-400">#${String(poke.id).padStart(4, "0")}</span>
+                  <span class="text-xs text-slate-400">• ${categoryText}</span>
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">${displayName}</h2>
+                <p class="text-xs text-slate-400 mt-1">Cao: <strong class="text-slate-200">${(poke.height / 10).toFixed(1)} m</strong> • Nặng: <strong class="text-slate-200">${(poke.weight / 10).toFixed(1)} kg</strong></p>
+              </div>
+
+              <div class="bg-slate-900/70 rounded-xl p-3.5 border border-slate-800 text-left">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">📖 Dữ liệu Pokédex</div>
+                <p class="text-xs text-slate-200 leading-relaxed">${pokedexDesc}</p>
+              </div>
             </div>
           </div>
 
-          <div class="flex-1 w-full space-y-3 text-center sm:text-left">
-            <div>
-              <div class="flex items-center justify-center sm:justify-start gap-2">
-                <span class="text-xs font-extrabold text-rose-400">#${String(poke.id).padStart(4, "0")}</span>
-                <span class="text-xs text-slate-400">• ${categoryText}</span>
-              </div>
-              <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">${displayName}</h2>
-              <p class="text-xs text-slate-400 mt-1">Cao: <strong class="text-slate-200">${(poke.height / 10).toFixed(1)} m</strong> • Nặng: <strong class="text-slate-200">${(poke.weight / 10).toFixed(1)} kg</strong></p>
-            </div>
-
-            <div class="bg-slate-900/70 rounded-xl p-3.5 border border-slate-800 text-left">
-              <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">📖 Dữ liệu Pokédex</div>
-              <p class="text-xs text-slate-200 leading-relaxed">${pokedexDesc}</p>
+          <!-- Các bản game xuất hiện -->
+          <div class="pt-2 border-t border-slate-800/80 space-y-2">
+            <div class="text-xs font-bold text-slate-300">🎮 Xuất hiện trong các phiên bản game:</div>
+            <div class="flex flex-wrap gap-1.5">
+              ${gameBadgesHtml}
             </div>
           </div>
         </div>
@@ -670,7 +728,7 @@
           </div>
         </div>
 
-        <!-- 3. BẢNG KHẮC HỆ CỦA POKÉMON NÀY (BỊ x MẤY) -->
+        <!-- 3. BẢNG KHẮC HỆ CỦA POKÉMON NÀY -->
         <div class="glass-card rounded-2xl p-5 space-y-3">
           <h3 class="text-sm font-bold text-white">🛡️ Bảng khắc hệ của ${displayName} (Sát thương nhận vào)</h3>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -691,41 +749,135 @@
           </div>
         </div>
 
-        <!-- 4. NHÁNH TIẾN HÓA -->
+        <!-- 4. NHÁNH TIẾN HÓA & ĐIỀU KIỆN -->
         <div class="glass-card rounded-2xl p-5 space-y-3">
-          <h3 class="text-sm font-bold text-white">🧬 Sơ đồ tiến hóa (Evolution Chain)</h3>
-          <div class="flex items-center gap-2 overflow-x-auto pb-2 pt-1">
+          <h3 class="text-sm font-bold text-white">🧬 Sơ đồ & Cách tiến hóa (Evolution Chain)</h3>
+          <div class="flex ${isBranched ? 'flex-wrap' : 'overflow-x-auto'} items-center gap-2.5 pb-2 pt-1">
             ${evoHtml}
           </div>
         </div>
 
-        <!-- 5. BỂ CHIÊU THỨC HỌC ĐƯỢC -->
+        <!-- 5. BỂ CHIÊU THỨC ĐẦY ĐỦ 4 NHÓM & LỌC THEO BẢN GAME -->
         <div class="glass-card rounded-2xl p-5 space-y-4">
-          <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 class="text-sm font-bold text-white">💥 Bể chiêu thức học được (Move Pool)</h3>
-              <p class="text-[11px] text-slate-400 mt-0.5">Chạm vào tên chiêu bất kỳ để xem chỉ số Power, Accuracy và giải thích năng lực.</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">Chạm vào chiêu để xem Power, Accuracy và giải thích năng lực.</p>
             </div>
-            <div class="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
-              <button id="subTabLvlBtn" onclick="switchMoveSubTab('lvl')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white transition">Theo Level (${levelMoves.length})</button>
-              <button id="subTabTmBtn" onclick="switchMoveSubTab('tm')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition">Đĩa TM / HM (${machineMoves.length})</button>
-            </div>
+            ${versionGroups.length > 0 ? `
+              <div class="flex items-center gap-2">
+                <label class="text-[11px] text-slate-400 shrink-0">Bản game:</label>
+                <select id="moveVersionSelect" onchange="renderMovePoolSection()" class="bg-slate-900 text-white text-xs font-semibold rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
+                  ${versionOptionsHtml}
+                </select>
+              </div>
+            ` : ""}
           </div>
 
-          <div id="subPanelLvl" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            ${movesListHtml || `<p class="text-xs text-slate-400">Không có dữ liệu chiêu thức.</p>`}
+          <!-- 4 Tab phương thức học chiêu -->
+          <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+            <button onclick="switchMoveTab('level-up')" data-mtab="level-up" class="move-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white shrink-0">Theo Level</button>
+            <button onclick="switchMoveTab('machine')" data-mtab="machine" class="move-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white shrink-0">Đĩa TM / HM</button>
+            <button onclick="switchMoveTab('egg')" data-mtab="egg" class="move-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white shrink-0">Chiêu Trứng (Egg)</button>
+            <button onclick="switchMoveTab('tutor')" data-mtab="tutor" class="move-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white shrink-0">Move Tutor</button>
           </div>
 
-          <div id="subPanelTm" class="hidden space-y-3">
-            <div id="tmMoveInfoBox" class="hidden bg-slate-900 rounded-xl p-3 border border-sky-500/40 text-xs text-slate-200"></div>
-            <div class="flex flex-wrap gap-1.5">
-              ${tmListHtml || `<p class="text-xs text-slate-400">Không có chiêu TM/HM.</p>`}
-            </div>
-          </div>
+          <div id="moveInfoBanner" class="hidden bg-slate-900 rounded-xl p-3 border border-sky-500/40 text-xs text-slate-200"></div>
+          <div id="movePoolContainer"></div>
         </div>
       `;
 
       poke.abilities.forEach(a => fetchAbilityDescription(a.ability.name));
+      renderMovePoolSection();
+    }
+
+    function switchMoveTab(tabMethod) {
+      activeMoveTab = tabMethod;
+      document.querySelectorAll(".move-tab-btn").forEach(btn => {
+        if (btn.dataset.mtab === tabMethod) {
+          btn.className = "move-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white shrink-0";
+        } else {
+          btn.className = "move-tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white shrink-0";
+        }
+      });
+      renderMovePoolSection();
+    }
+
+    function renderMovePoolSection() {
+      if (!activePokeData) return;
+      const poke = activePokeData.poke;
+      const selectEl = document.getElementById("moveVersionSelect");
+      const selectedVersion = selectEl ? selectEl.value : "";
+      const container = document.getElementById("movePoolContainer");
+
+      const counts = { "level-up": 0, "machine": 0, "egg": 0, "tutor": 0 };
+      const matchedMoves = [];
+
+      poke.moves.forEach(m => {
+        const slug = m.move.name;
+        const enName = formatEnglishName(slug);
+        const vgDetails = m.version_group_details.filter(d => !selectedVersion || d.version_group.name === selectedVersion);
+
+        vgDetails.forEach(d => {
+          const method = d.move_learn_method.name;
+          if (counts[method] !== undefined) counts[method]++;
+          if (method === activeMoveTab) {
+            matchedMoves.push({
+              slug,
+              enName,
+              lvl: d.level_learned_at
+            });
+          }
+        });
+      });
+
+      // Cập nhật số lượng trên từng tab
+      document.querySelectorAll(".move-tab-btn").forEach(btn => {
+        const m = btn.dataset.mtab;
+        const baseLabels = {
+          "level-up": "Theo Level",
+          "machine": "Đĩa TM / HM",
+          "egg": "Chiêu Trứng (Egg)",
+          "tutor": "Move Tutor"
+        };
+        btn.textContent = `${baseLabels[m]} (${counts[m]})`;
+      });
+
+      if (matchedMoves.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 py-3">Không có chiêu thức nào thuộc nhóm này trong phiên bản game đã chọn.</p>`;
+        return;
+      }
+
+      if (activeMoveTab === "level-up") {
+        matchedMoves.sort((a, b) => a.lvl - b.lvl);
+        container.innerHTML = `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            ${matchedMoves.map(m => {
+              const desc = VI_MOVE_DESC[m.slug] || "Chạm để xem chỉ số & năng lực chiêu.";
+              return `
+                <div onclick="loadMoveDetail('${m.slug}')" class="bg-slate-900/75 hover:bg-slate-800/90 rounded-xl p-2.5 border border-slate-800 cursor-pointer transition">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-xs text-white">${m.enName}</span>
+                    <span class="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-emerald-300">Lv. ${m.lvl === 0 ? "Evo" : m.lvl}</span>
+                  </div>
+                  <p id="mv-desc-${m.slug}" class="text-[11px] text-slate-400 mt-1">${desc}</p>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
+      } else {
+        matchedMoves.sort((a, b) => a.enName.localeCompare(b.enName));
+        container.innerHTML = `
+          <div class="flex flex-wrap gap-1.5">
+            ${matchedMoves.map(m => `
+              <span onclick="loadMoveDetail('${m.slug}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer">
+                ${m.enName}
+              </span>
+            `).join("")}
+          </div>
+        `;
+      }
     }
 
     function toggleShinySprite(id) {
@@ -761,36 +913,43 @@
 
     async function loadMoveDetail(slug) {
       const inlineEl = document.getElementById(`mv-desc-${slug}`);
-      const tmBox = document.getElementById("tmMoveInfoBox");
+      const bannerEl = document.getElementById("moveInfoBanner");
       const enName = formatEnglishName(slug);
 
       if (VI_MOVE_DESC[slug]) {
         if (inlineEl) inlineEl.textContent = VI_MOVE_DESC[slug];
-        if (tmBox) {
-          tmBox.classList.remove("hidden");
-          tmBox.innerHTML = `<strong class="text-sky-300">${enName}:</strong> ${VI_MOVE_DESC[slug]}`;
+        if (bannerEl) {
+          bannerEl.classList.remove("hidden");
+          bannerEl.innerHTML = `<strong class="text-sky-300">${enName}:</strong> ${VI_MOVE_DESC[slug]}`;
         }
         return;
       }
 
       if (inlineEl) inlineEl.textContent = "Đang tải thông số chiêu thức...";
+      if (bannerEl) {
+        bannerEl.classList.remove("hidden");
+        bannerEl.innerHTML = `<strong class="text-sky-300">${enName}:</strong> Đang tải thông số...`;
+      }
+
       try {
         let info = moveDescCache[slug];
         if (!info) {
           const res = await fetch(`https://pokeapi.co/api/v2/move/${slug}`);
           const data = await res.json();
           const typeVi = TYPE_INFO[data.type.name]?.vi || data.type.name;
+          const catMap = { physical: "Vật lý", special: "Đặc biệt", status: "Trạng thái" };
+          const catVi = catMap[data.damage_class?.name] || "";
           const pwr = data.power ? `Power: ${data.power}` : "Status";
           const acc = data.accuracy ? `Acc: ${data.accuracy}%` : "Acc: —";
           const enEntry = data.effect_entries.find(e => e.language.name === "en") || data.flavor_text_entries.find(e => e.language.name === "en");
           const desc = enEntry ? (enEntry.short_effect || enEntry.flavor_text).replace(/\$effect_chance/g, data.effect_chance || "").replace(/\s+/g, " ") : "";
-          info = `[Hệ ${typeVi} • ${pwr} • ${acc}] ${desc}`;
+          info = `[Hệ ${typeVi} • ${catVi} • ${pwr} • ${acc}] ${desc}`;
           moveDescCache[slug] = info;
         }
         if (inlineEl) inlineEl.textContent = info;
-        if (tmBox) {
-          tmBox.classList.remove("hidden");
-          tmBox.innerHTML = `<strong class="text-sky-300">${enName}:</strong> ${info}`;
+        if (bannerEl) {
+          bannerEl.classList.remove("hidden");
+          bannerEl.innerHTML = `<strong class="text-sky-300">${enName}:</strong> ${info}`;
         }
       } catch (e) {
         if (inlineEl) inlineEl.textContent = "Không tải được thông tin chiêu.";
